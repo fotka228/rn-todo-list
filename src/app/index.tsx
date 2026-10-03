@@ -1,98 +1,143 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQuery, useMutation } from 'convex/react';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Header } from '../components/Header';
+import { TodoForm } from '../components/TodoForm';
+import { TodoList } from '../components/TodoList';
+import { api } from '../../convex/_generated/api';
+import { Id } from '../../convex/_generated/dataModel';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
+export default function Index() {
+  // Автоматичне підключення та підписка на дані Convex у реальному часі
+  const rawTodos = useQuery(api.todos.getTodos);
+
+  // Мутації для маніпуляції даними у Convex
+  const createTodo = useMutation(api.todos.createTodo);
+  const toggleTodo = useMutation(api.todos.toggleTodo);
+  const updateTodo = useMutation(api.todos.updateTodo);
+  const deleteTodo = useMutation(api.todos.deleteTodo);
+
+  // Трансформація даних з Convex під інтерфейс ваших компонентів (поля _id -> id, isCompleted -> completed)
+  const todos = useMemo(() => {
+    if (!rawTodos) return [];
+    return rawTodos.map((item) => ({
+      id: item._id,
+      text: item.text,
+      completed: item.isCompleted,
+      createdAt: item.createdAt,
+    }));
+  }, [rawTodos]);
+
+  const handleAdd = async (text: string) => {
+    try {
+      await createTodo({ text });
+    } catch (err) {
+      Alert.alert('Помилка', 'Не вдалося створити завдання.');
+      console.error(err);
+    }
+  };
+
+  const handleToggle = async (id: string) => {
+    try {
+      await toggleTodo({ id: id as Id<'todos'> });
+    } catch (err) {
+      Alert.alert('Помилка', 'Не вдалося оновити статус завдання.');
+      console.error(err);
+    }
+  };
+
+  const handleEdit = async (id: string, text: string) => {
+    try {
+      await updateTodo({ id: id as Id<'todos'>, text });
+    } catch (err) {
+      Alert.alert('Помилка', 'Не вдалося оновити текст завдання.');
+      console.error(err);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteTodo({ id: id as Id<'todos'> });
+    } catch (err) {
+      Alert.alert('Помилка', 'Не вдалося видалити завдання.');
+      console.error(err);
+    }
+  };
+
+  const completedCount = useMemo(
+    () => todos.filter((t) => t.completed).length,
+    [todos]
   );
-}
 
-export default function HomeScreen() {
+  const isLoading = rawTodos === undefined;
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={styles.card}>
+          <Header totalCount={todos.length} completedCount={completedCount} />
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+          <TodoForm onAdd={handleAdd} loading={isLoading} />
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#6366f1" />
+              <Text style={styles.loadingText}>Завантаження...</Text>
+            </View>
+          ) : (
+            <View style={styles.listWrapper}>
+              <TodoList
+                todos={todos}
+                refreshing={false}
+                onRefresh={async () => {}}
+                onToggle={handleToggle}
+                onDelete={handleDelete}
+                onEdit={handleEdit}
+              />
+            </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
   safeArea: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+    backgroundColor: '#f8fafc',
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  container: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
   },
-  title: {
-    textAlign: 'center',
+  card: {
+    flex: 1,
+    padding: 20,
   },
-  code: {
-    textTransform: 'uppercase',
+  listWrapper: {
+    flex: 1,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#64748b',
   },
 });

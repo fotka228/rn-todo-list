@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -9,34 +10,43 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
-import { useTodos } from '../../context/TodoContext';
+import { useAuthActions } from '@convex-dev/auth/react';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { useRouter } from 'expo-router';
 
 export default function SettingsScreen() {
   const { colors, isDarkMode, toggleTheme } = useTheme();
-  const { clearCompleted, clearAll } = useTodos();
+  const { signOut } = useAuthActions();
+  const router = useRouter();
+  const user = useQuery(api.users.currentUser);
 
-  const handleClearCompleted = () => {
-    Alert.alert(
-      'Очистити виконані',
-      'Ви впевнені, що хочете видалити всі виконані завдання?',
-      [
-        { text: 'Скасувати', style: 'cancel' },
-        { text: 'Видалити', style: 'destructive', onPress: clearCompleted },
-      ]
-    );
+  // <Unauthenticated> лише міняє стек, але адреса лишається /settings,
+  // тому після виходу переходимо на екран входу вручну.
+  const doSignOut = async () => {
+    try {
+      await signOut();
+      router.replace('/sign-in' as any);
+    } catch (e) {
+      console.error('Sign out failed', e);
+    }
   };
 
-  const handleClearAll = () => {
-    Alert.alert(
-      'Видалити всі',
-      'Ви впевнені, що хочете видалити ВСІ завдання? Цю дію не можна скасувати.',
-      [
-        { text: 'Скасувати', style: 'cancel' },
-        { text: 'Видалити все', style: 'destructive', onPress: clearAll },
-      ]
-    );
+  const handleSignOut = () => {
+    // На вебі Alert.alert не показує діалог, тому використовуємо window.confirm
+    if (Platform.OS === 'web') {
+      if (window.confirm('Ви впевнені, що хочете вийти з додатку?')) {
+        doSignOut();
+      }
+      return;
+    }
+
+    Alert.alert('Вихід з акаунта', 'Ви впевнені, що хочете вийти з додатку?', [
+      { text: 'Скасувати', style: 'cancel' },
+      { text: 'Вийти', style: 'destructive', onPress: doSignOut },
+    ]);
   };
 
   return (
@@ -46,11 +56,49 @@ export default function SettingsScreen() {
           Налаштування ⚙️
         </Text>
 
-        {/* Блок зміни теми */}
+        {/* Блок профілю користувача та виходу */}
+        <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>
+          Профіль користувача
+        </Text>
         <View
           style={[
             styles.section,
-            { backgroundColor: colors.surface, borderColor: colors.border },
+            { backgroundColor: colors.cardBg, borderColor: colors.border },
+          ]}
+        >
+          <View style={styles.userRow}>
+            <View style={[styles.userAvatar, { backgroundColor: colors.primary }]}>
+              <MaterialIcons name="person" size={24} color="#FFFFFF" />
+            </View>
+            <View style={styles.userInfo}>
+              <Text style={[styles.userName, { color: colors.text }]}>
+                {user?.name ?? 'Користувач'}
+              </Text>
+              <Text style={[styles.userEmail, { color: colors.textMuted }]}>
+                {user?.email ?? 'Завантаження...'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.signOutButton}
+              onPress={handleSignOut}
+              activeOpacity={0.5}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Вийти з акаунта"
+            >
+              <MaterialIcons name="logout" size={24} color={colors.danger} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Блок зміни теми */}
+        <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>
+          Зовнішній вигляд
+        </Text>
+        <View
+          style={[
+            styles.section,
+            { backgroundColor: colors.cardBg, borderColor: colors.border },
           ]}
         >
           <View style={styles.row}>
@@ -64,38 +112,13 @@ export default function SettingsScreen() {
                 {isDarkMode ? 'Темна тема' : 'Світла тема'}
               </Text>
             </View>
-            <Switch value={isDarkMode} onValueChange={toggleTheme} />
+            <Switch
+              value={isDarkMode}
+              onValueChange={toggleTheme}
+              trackColor={{ false: '#d1d5db', true: colors.primary }}
+              thumbColor="#ffffff"
+            />
           </View>
-        </View>
-
-        {/* Блок масових дій */}
-        <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>
-          Керування завданнями
-        </Text>
-        <View
-          style={[
-            styles.section,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={handleClearCompleted}
-          >
-            <Ionicons name="checkmark-done-outline" size={22} color="#f59e0b" />
-            <Text style={[styles.actionBtnText, { color: colors.text }]}>
-              Очистити виконані завдання
-            </Text>
-          </TouchableOpacity>
-
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-          <TouchableOpacity style={styles.actionBtn} onPress={handleClearAll}>
-            <Ionicons name="trash-outline" size={22} color={colors.danger} />
-            <Text style={[styles.actionBtnText, { color: colors.danger }]}>
-              Видалити всі завдання
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {/* Блок інформації про додаток */}
@@ -105,12 +128,14 @@ export default function SettingsScreen() {
         <View
           style={[
             styles.section,
-            { backgroundColor: colors.surface, borderColor: colors.border },
+            { backgroundColor: colors.cardBg, borderColor: colors.border },
           ]}
         >
           <View style={styles.row}>
             <Text style={[styles.rowText, { color: colors.text }]}>Версія</Text>
-            <Text style={{ color: colors.textMuted }}>v2.0.0</Text>
+            <Text style={{ color: colors.textMuted, fontWeight: '600' }}>
+              v3.0.0 (Auth)
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -120,20 +145,26 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
-  container: { padding: 20 },
-  title: { fontSize: 26, fontWeight: 'bold', marginBottom: 20 },
+  container: { padding: 20, paddingBottom: 40 },
+  title: { fontSize: 26, fontWeight: 'bold', marginBottom: 15 },
   sectionHeader: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     marginBottom: 8,
     marginTop: 16,
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   section: {
     borderRadius: 16,
     borderWidth: 1,
     padding: 16,
     marginBottom: 10,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   row: {
     flexDirection: 'row',
@@ -142,7 +173,33 @@ const styles = StyleSheet.create({
   },
   rowLeft: { flexDirection: 'row', alignItems: 'center' },
   rowText: { fontSize: 16, marginLeft: 12, fontWeight: '500' },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
-  actionBtnText: { fontSize: 16, marginLeft: 12, fontWeight: '500' },
-  divider: { height: 1, marginVertical: 8 },
+  userRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  userAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userInfo: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  userEmail: {
+    fontSize: 13,
+  },
+  signOutButton: {
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
 });

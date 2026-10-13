@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { ThemeColors, ThemeMode } from '../types';
+import type { ThemeColors, ThemeMode } from '../types/theme';
 
 const STORAGE_KEY = '@todo_theme_mode';
 
@@ -49,7 +49,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const toggleTheme = () => {
-    const newMode = mode === 'light' ? 'dark' : 'light';
+    const newMode: ThemeMode = mode === 'light' ? 'dark' : 'light';
     setMode(newMode);
     AsyncStorage.setItem(STORAGE_KEY, newMode);
   };

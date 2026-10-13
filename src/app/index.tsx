@@ -14,20 +14,22 @@ import { useQuery, useMutation } from 'convex/react';
 import { Header } from '../components/Header';
 import { TodoForm } from '../components/TodoForm';
 import { TodoList } from '../components/TodoList';
+import { useTheme } from '../context/ThemeContext';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
 
 export default function Index() {
-  // Автоматичне підключення та підписка на дані Convex у реальному часі
+  const { colors } = useTheme();
+
+  // Підписка на дані Convex у реальному часі
   const rawTodos = useQuery(api.todos.getTodos);
 
-  // Мутації для маніпуляції даними у Convex
   const createTodo = useMutation(api.todos.createTodo);
   const toggleTodo = useMutation(api.todos.toggleTodo);
   const updateTodo = useMutation(api.todos.updateTodo);
   const deleteTodo = useMutation(api.todos.deleteTodo);
 
-  // Трансформація даних з Convex під інтерфейс ваших компонентів (поля _id -> id, isCompleted -> completed)
+  // _id -> id, isCompleted -> completed
   const todos = useMemo(() => {
     if (!rawTodos) return [];
     return rawTodos.map((item) => ({
@@ -38,12 +40,21 @@ export default function Index() {
     }));
   }, [rawTodos]);
 
+  const showError = (message: string, err: unknown) => {
+    console.error(err);
+    // Alert.alert не працює на вебі, тому там використовуємо window.alert
+    if (Platform.OS === 'web') {
+      window.alert(message);
+    } else {
+      Alert.alert('Помилка', message);
+    }
+  };
+
   const handleAdd = async (text: string) => {
     try {
       await createTodo({ text });
     } catch (err) {
-      Alert.alert('Помилка', 'Не вдалося створити завдання.');
-      console.error(err);
+      showError('Не вдалося створити завдання.', err);
     }
   };
 
@@ -51,8 +62,7 @@ export default function Index() {
     try {
       await toggleTodo({ id: id as Id<'todos'> });
     } catch (err) {
-      Alert.alert('Помилка', 'Не вдалося оновити статус завдання.');
-      console.error(err);
+      showError('Не вдалося оновити статус завдання.', err);
     }
   };
 
@@ -60,8 +70,7 @@ export default function Index() {
     try {
       await updateTodo({ id: id as Id<'todos'>, text });
     } catch (err) {
-      Alert.alert('Помилка', 'Не вдалося оновити текст завдання.');
-      console.error(err);
+      showError('Не вдалося оновити текст завдання.', err);
     }
   };
 
@@ -69,8 +78,7 @@ export default function Index() {
     try {
       await deleteTodo({ id: id as Id<'todos'> });
     } catch (err) {
-      Alert.alert('Помилка', 'Не вдалося видалити завдання.');
-      console.error(err);
+      showError('Не вдалося видалити завдання.', err);
     }
   };
 
@@ -82,7 +90,7 @@ export default function Index() {
   const isLoading = rawTodos === undefined;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -94,8 +102,10 @@ export default function Index() {
 
           {isLoading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#6366f1" />
-              <Text style={styles.loadingText}>Завантаження...</Text>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[styles.loadingText, { color: colors.textMuted }]}>
+                Завантаження...
+              </Text>
             </View>
           ) : (
             <View style={styles.listWrapper}>
@@ -116,20 +126,10 @@ export default function Index() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  container: {
-    flex: 1,
-  },
-  card: {
-    flex: 1,
-    padding: 20,
-  },
-  listWrapper: {
-    flex: 1,
-  },
+  safeArea: { flex: 1 },
+  container: { flex: 1 },
+  card: { flex: 1, padding: 20 },
+  listWrapper: { flex: 1 },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -138,6 +138,5 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#64748b',
   },
 });
